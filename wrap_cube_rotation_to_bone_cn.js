@@ -4,7 +4,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
   author: 'ydxc2009（中文化 by ChatGPT）',
   description:
     '查找旋转角度不在 {0, ±22.5, ±45, ±67.5, ±90, ±135} 之内的立方体。对每个立方体创建一个骨骼/组，复制其旋转和原点到骨骼，并将立方体旋转重置为 0,0,0。骨骼名称自动编号，避免重复。支持撤销操作。',
-  version: '1.2.1',
+  version: '1.2.0',
   variant: 'both',
 
   onload() {
@@ -62,7 +62,6 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
             cube.origin[2] || 0
           ];
 
-          // 使用纯英文骨骼名
           const base = `${cube.name || 'cube'}_bone`;
           const boneName = uniqueBoneName(base);
 
@@ -70,6 +69,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
             name: boneName,
             origin: orig,
             rotation: rot,
+            // 如果当前格式支持骨骼，则标记为骨骼，否则为普通组
             is_bone: !!Format.bone_rig
           }).init();
 
