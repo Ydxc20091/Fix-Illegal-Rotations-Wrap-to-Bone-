@@ -62,7 +62,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
             cube.origin[2] || 0
           ];
 
-          const base = `${cube.name || '立方体'}_骨骼`;
+          const base = `${cube.name || 'cube'}_bone`;
           const boneName = uniqueBoneName(base);
 
           const bone = new Group({
