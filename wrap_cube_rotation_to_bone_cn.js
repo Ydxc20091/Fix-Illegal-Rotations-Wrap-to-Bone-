@@ -1,5 +1,5 @@
 // wrap_and_unwrap_bone_cn.js
-Plugin.register('wrap_and_unwrap_bone_cn', {
+Plugin.register('wrap_cube_rotation_to_bone_cn', {
   title: '修复非法旋转与拆分骨骼',
   author: 'ydxc2009',
   description: '提供两个功能：① 修复非法旋转并包裹为骨骼；② 拆分骨骼回普通块（可仅拆含_bone的或强制全部拆分）。支持撤销操作。',
