@@ -1,5 +1,5 @@
 // wrap_and_unwrap_bone_en.js
-Plugin.register('wrap_and_unwrap_bone_en', {
+Plugin.register('wrap_cube_rotation_to_bone', {
   title: 'Fix Illegal Rotations & Unwrap Bones',
   author: 'ydxc2009 (Extended & Translated by ChatGPT)',
   description: 'Provides two main functions: (1) Fix illegal cube rotations by wrapping them into bones; (2) Unwrap bones or groups back to cubes (either only _bone or all groups). Undo-safe.',
