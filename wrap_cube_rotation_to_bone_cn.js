@@ -1,10 +1,10 @@
-// wrap_cube_rotation_to_bone_cn.js
-Plugin.register('wrap_cube_rotation_to_bone_cn', {
-  title: '修复非法旋转（包裹为骨骼）',
+// wrap_cube_rotation_to_bone.js
+Plugin.register('wrap_cube_rotation_to_bone', {
+  title: '修复非法旋转（包裹到骨骼）',
   author: 'ydxc2009',
   description:
-    '查找旋转角度不在 {0, ±22.5, ±45, ±67.5, ±90, ±135} 之内的立方体。为其创建骨骼/组，复制立方体的旋转与原点到骨骼，并将立方体旋转重置为 0,0,0。骨骼名称自动编号，避免重复。全部动作支持撤销。新增：① 仅拆分名称含 _bone 的骨骼；② 强制拆分任意骨骼/组；③ 强制包裹并把块旋转清零；④ 仅添加零旋转组且保留块旋转。',
-  version: '1.3.2',
+    '查找旋转角度不在 {0, ±22.5, ±45, ±67.5, ±90, ±135, ±180} 范围内的立方体。为每个这样的立方体创建骨骼/组，将立方体的旋转和原点复制到骨骼，并将立方体旋转重置为0,0,0。自动编号的骨骼名称以避免重复。所有操作都支持撤销。新增功能：(1) 解包名称包含_bone的组；(2) 强制解包任何组（忽略名称，递归）；(3) 强制包裹所有立方体并清零旋转；(4) 添加零旋转组同时保持立方体旋转。',
+  version: '1.3.3',
   variant: 'both',
 
   onload() {
@@ -19,7 +19,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
       return clamp(x);
     };
 
-    // 旋转矩阵（ZYX 顺序）：R = Rz * Ry * Rx
+    // 旋转矩阵（ZYX顺序）：R = Rz * Ry * Rx
     function eulerToMatZYX([xDeg, yDeg, zDeg]) {
       const x = toRad(xDeg || 0), y = toRad(yDeg || 0), z = toRad(zDeg || 0);
       const cx = Math.cos(x), sx = Math.sin(x);
@@ -38,7 +38,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2]
       ];
     }
-    // 将点 p 按 rot（度）绕 pivot 旋转
+    // 绕轴心点旋转点p
     function rotatePointAround(p, rot, pivot) {
       const v = [
         (p[0]||0) - (pivot[0]||0),
@@ -53,7 +53,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         clamp(vv[2] + (pivot[2]||0))
       ];
     }
-    // 欧拉逐轴相加并标准化（本场景足够稳定）
+    // 简单的欧拉角逐轴相加并归一化
     function composeEulerAdd(a = [0,0,0], b = [0,0,0]) {
       return [
         normAngle((a[0]||0) + (b[0]||0)),
@@ -62,7 +62,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
       ];
     }
 
-    // 名称唯一化
+    // 唯一名称生成器
     const uniqueNameFactory = () => {
       const existing = new Set(Group.all.map(g => g.name));
       const counters = new Map();
@@ -77,7 +77,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
     };
     const makeUnique = uniqueNameFactory();
 
-    // 递归采集组（用于强制拆分）
+    // 递归收集组（用于强制解包）
     function collectGroupsRecursive(groups) {
       const set = new Set();
       const dfs = (g) => {
@@ -89,13 +89,13 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
       return Array.from(set);
     }
 
-    // 深度排序：先拆最深层
+    // 最深优先排序
     function sortGroupsDeepestFirst(groups) {
       function depth(g){ let d=0,p=g.parent; while(p && p!=='root'){ d++; p=p.parent; } return d; }
       return groups.slice().sort((a,b) => depth(b) - depth(a));
     }
 
-    // 拆分核心：把组的旋转并入立方体，立方体原点绕组原点旋转，然后把立方体提升到上级
+    // 解包核心函数
     function unwrapOneGroup(group) {
       const parent = group.parent || null;
       let insertIndex = parent ? parent.children.indexOf(group) : undefined;
@@ -126,11 +126,12 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
       return moved;
     }
 
-    // ======== 功能1：修复非法旋转（包裹为骨骼） ========
-    const action_wrap_illegal = this.action = new Action('wrap_cube_rotation_to_bone_cn', {
-      name: '修复非法旋转（包裹为骨骼）',
+    // ======== 操作1：修复非法旋转（包裹并清零立方体） ========
+    const action_wrap_illegal = this.action = new Action('wrap_cube_rotation_to_bone', {
+      name: '修复非法旋转（包裹到骨骼）',
       click: () => {
-        const ALLOWED = [0, 22.5, 45, 67.5, 90, 135, -22.5, -45, -67.5, -90, -135];
+        // 添加了正负180度支持
+        const ALLOWED = [0, 22.5, 45, 67.5, 90, 135, 180, -22.5, -45, -67.5, -90, -135, -180];
         const isAllowed = (a) => ALLOWED.some(v => Math.abs((+a || 0) - v) <= EPS);
 
         const candidates = (Outliner.selected.length ? Outliner.selected : Cube.all)
@@ -141,7 +142,7 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         );
 
         if (!targets.length) {
-          Blockbench.showQuickMessage('没有需要处理的立方体（在选择或整个项目中）。');
+          Blockbench.showQuickMessage('没有需要修复的立方体（在选区或整个项目中）。');
           return;
         }
 
@@ -173,17 +174,17 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         });
 
         Canvas.updateAll();
-        Undo.finishEdit(`包裹并重置旋转（共 ${changed} 个立方体）`);
-        Blockbench.showQuickMessage(`完成：${changed} 个立方体已被包裹为自动编号骨骼，并重置旋转为 0,0,0。`);
+        Undo.finishEdit(`包裹并清零旋转（${changed}个立方体${changed===1?'':'s'})`);
+        Blockbench.showQuickMessage(`完成：${changed}个立方体已包裹到自动编号的骨骼中并重置为0,0,0。`);
       }
     });
 
-    // ======== 功能2：强制包裹并清零旋转（不看角度） ========
-    const action_wrap_force_zero = new Action('wrap_force_zero_cn', {
-      name: '强制包裹并清零旋转（每块一骨骼）',
+    // ======== 操作2：强制包裹并清零立方体旋转 ========
+    const action_wrap_force_zero = new Action('wrap_force_zero_en', {
+      name: '强制包裹 + 清零立方体旋转（每个立方体1个骨骼）',
       click: () => {
         const cubes = (Outliner.selected.length ? Outliner.selected : Cube.all).filter(e => e && e.type === 'cube');
-        if (!cubes.length) return Blockbench.showQuickMessage('没有选中或可处理的立方体。');
+        if (!cubes.length) return Blockbench.showQuickMessage('没有选中的或可用的立方体。');
 
         Undo.initEdit({ elements: cubes, outliner: true, selection: true });
         let changed = 0;
@@ -208,17 +209,17 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         });
 
         Canvas.updateAll();
-        Undo.finishEdit(`强制包裹并清零旋转（共 ${changed} 个）`);
-        Blockbench.showQuickMessage(`完成：${changed} 个立方体已包裹为骨骼并清零旋转。`);
+        Undo.finishEdit(`强制包裹 + 清零立方体旋转（${changed}）`);
+        Blockbench.showQuickMessage(`完成：${changed}个立方体已包裹并清零旋转。`);
       }
     });
 
-    // ======== 功能3：添加零旋转组（保留块旋转） ========
-    const action_add_zero_group_keep_cube = new Action('add_zero_group_keep_cube_cn', {
-      name: '添加零旋转组（块旋转不变）',
+    // ======== 操作3：添加零旋转组（保持立方体旋转） ========
+    const action_add_zero_group_keep_cube = new Action('add_zero_group_keep_cube_en', {
+      name: '添加零旋转组（保持立方体旋转）',
       click: () => {
         const cubes = (Outliner.selected.length ? Outliner.selected : Cube.all).filter(e => e && e.type === 'cube');
-        if (!cubes.length) return Blockbench.showQuickMessage('没有选中或可处理的立方体。');
+        if (!cubes.length) return Blockbench.showQuickMessage('没有选中的或可用的立方体。');
 
         Undo.initEdit({ elements: cubes, outliner: true, selection: true });
         let changed = 0;
@@ -242,19 +243,19 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         });
 
         Canvas.updateAll();
-        Undo.finishEdit(`添加零旋转组（共 ${changed} 个）`);
-        Blockbench.showQuickMessage(`完成：${changed} 个立方体已添加零旋转组（保留原旋转）。`);
+        Undo.finishEdit(`添加零旋转组（${changed}）`);
+        Blockbench.showQuickMessage(`完成：${changed}个立方体已封装在零旋转组中（立方体旋转保持不变）。`);
       }
     });
 
-    // ======== 功能4：拆分骨骼（名称含 _bone） ========
-    const action_unwrap_bone_name = new Action('unwrap_bone_name_cn', {
-      name: '拆分骨骼（名称含 _bone）',
+    // ======== 操作4：解包名称包含`_bone`的组 ========
+    const action_unwrap_bone_name = new Action('unwrap_bone_name_en', {
+      name: '解包骨骼（名称包含_bone）',
       click: () => {
         const baseList = (Outliner.selected.length ? Outliner.selected : Group.all)
           .filter(e => e && e.type === 'group');
         const targets = baseList.filter(g => (g.name || '').includes('_bone'));
-        if (!targets.length) return Blockbench.showQuickMessage('没有名称包含 _bone 的骨骼可拆分。');
+        if (!targets.length) return Blockbench.showQuickMessage('没有名称包含"_bone"的组需要解包。');
 
         const allRelated = [];
         targets.forEach(g => {
@@ -268,18 +269,18 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         sorted.forEach(g => { moved += unwrapOneGroup(g); });
 
         Canvas.updateAll();
-        Undo.finishEdit(`拆分骨骼（名称含 _bone，移动 ${moved} 个立方体）`);
-        Blockbench.showQuickMessage(`完成：拆分 ${targets.length} 个骨骼，移动 ${moved} 个立方体。`);
+        Undo.finishEdit(`按名称解包骨骼（_bone）。移动了${moved}个立方体。`);
+        Blockbench.showQuickMessage(`完成：解包了${targets.length}个组；移动了${moved}个立方体。`);
       }
     });
 
-    // ======== 功能5：强制拆分任意骨骼/组（忽略名字，递归） ========
-    const action_unwrap_any_group = new Action('unwrap_any_group_cn', {
-      name: '强制拆分任意骨骼/组（保持外观）',
+    // ======== 操作5：强制解包任何组（忽略名称，递归） ========
+    const action_unwrap_any_group = new Action('unwrap_any_group_en', {
+      name: '强制解包任何组（保持外观）',
       click: () => {
         const selGroups = (Outliner.selected || []).filter(e => e && e.type === 'group');
         const targets = selGroups.length ? collectGroupsRecursive(selGroups) : Group.all.slice();
-        if (!targets.length) return Blockbench.showQuickMessage('没有可拆分的骨骼/组。');
+        if (!targets.length) return Blockbench.showQuickMessage('没有需要解包的组。');
 
         const allRelated = [];
         targets.forEach(g => {
@@ -288,25 +289,23 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
         });
 
         Undo.initEdit({ elements: allRelated, outliner: true, selection: true });
-
         const sorted = sortGroupsDeepestFirst(targets);
         let moved = 0;
         sorted.forEach(g => { moved += unwrapOneGroup(g); });
 
         Canvas.updateAll();
-        Undo.finishEdit(`强制拆分任意骨骼/组（移动 ${moved} 个立方体）`);
-        Blockbench.showQuickMessage(`完成：拆分 ${targets.length} 个骨骼/组，移动 ${moved} 个立方体。`);
+        Undo.finishEdit(`强制解包组。移动了${moved}个立方体。`);
+        Blockbench.showQuickMessage(`完成：解包了${targets.length}个组；移动了${moved}个立方体。`);
       }
     });
 
-    // 菜单挂载
+    // 菜单
     MenuBar.addAction(action_wrap_illegal, 'filter');
     MenuBar.addAction(action_wrap_force_zero, 'filter');
     MenuBar.addAction(action_add_zero_group_keep_cube, 'filter');
     MenuBar.addAction(action_unwrap_bone_name, 'filter');
     MenuBar.addAction(action_unwrap_any_group, 'filter');
 
-    // 卸载时方便清理
     this._extra_actions = [
       action_wrap_force_zero,
       action_add_zero_group_keep_cube,
