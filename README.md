@@ -8,7 +8,7 @@ A Blockbench plugin that wraps cubes with illegal rotations into bones, zeroes c
 ## Features
 
 1. **Fix Illegal Rotations (Wrap to Bone)**
-   - Detect rotations not in `{0, ±22.5, ±45, ±67.5, ±90, ±135}`.
+   - Detect rotations not in `{0, ±22.5, ±45, ±67.5, ±90, ±135, ±180}`.
    - Create a bone per cube, copy cube rotation & origin to the bone, set cube rotation to `0,0,0`.
 
 2. **Force Wrap + Zero Cube Rotation (1 bone per cube)**
