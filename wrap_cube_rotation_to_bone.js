@@ -3,8 +3,8 @@ Plugin.register('wrap_cube_rotation_to_bone', {
   title: 'Fix Illegal Rotations (Wrap to Bone)',
   author: 'ydxc2009',
   description:
-    'Find cubes whose rotation is not in {0, ±22.5, ±45, ±67.5, ±90, ±135}. For each, create a bone/group, copy the cube rotation & origin to the bone, and reset the cube rotation to 0,0,0. Auto-numbered bone names to avoid duplicates. All actions are undo-friendly. Added: (1) Unwrap groups whose name contains _bone; (2) Force unwrap any groups (name ignored, recursive); (3) Force wrap all cubes & zero cube rotation; (4) Add zero-rotation group while keeping cube rotation.',
-  version: '1.3.2',
+    'Find cubes whose rotation is not in {0, ±22.5, ±45, ±67.5, ±90, ±135, ±180}. For each, create a bone/group, copy the cube rotation & origin to the bone, and reset the cube rotation to 0,0,0. Auto-numbered bone names to avoid duplicates. All actions are undo-friendly. Added: (1) Unwrap groups whose name contains _bone; (2) Force unwrap any groups (name ignored, recursive); (3) Force wrap all cubes & zero cube rotation; (4) Add zero-rotation group while keeping cube rotation.',
+  version: '1.3.3',
   variant: 'both',
 
   onload() {
@@ -130,7 +130,8 @@ Plugin.register('wrap_cube_rotation_to_bone', {
     const action_wrap_illegal = this.action = new Action('wrap_cube_rotation_to_bone', {
       name: 'Fix Illegal Rotations (Wrap to Bone)',
       click: () => {
-        const ALLOWED = [0, 22.5, 45, 67.5, 90, 135, -22.5, -45, -67.5, -90, -135];
+        // 添加了正负180度支持
+        const ALLOWED = [0, 22.5, 45, 67.5, 90, 135, 180, -22.5, -45, -67.5, -90, -135, -180];
         const isAllowed = (a) => ALLOWED.some(v => Math.abs((+a || 0) - v) <= EPS);
 
         const candidates = (Outliner.selected.length ? Outliner.selected : Cube.all)
