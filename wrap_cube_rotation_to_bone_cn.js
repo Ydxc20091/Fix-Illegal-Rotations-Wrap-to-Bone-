@@ -1,5 +1,5 @@
 // wrap_cube_rotation_to_bone.js
-Plugin.register('wrap_cube_rotation_to_bone', {
+Plugin.register('wrap_cube_rotation_to_bone_cn', {
   title: '修复非法旋转（包裹到骨骼）',
   author: 'ydxc2009',
   description:
