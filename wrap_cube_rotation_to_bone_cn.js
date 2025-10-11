@@ -299,18 +299,132 @@ Plugin.register('wrap_cube_rotation_to_bone_cn', {
       }
     });
 
+    // ======== 操作6：同旋转骨骼分组 ========
+    const action_group_same_rotation = new Action('group_same_rotation_bones', {
+      name: '同旋转骨骼分组',
+      description: '将同旋转的骨骼分组整理到一个骨骼分组，保留块的自身的位置',
+      click: () => {
+        // 收集所有骨骼（Group）
+        const bones = Group.all.filter(g => g.is_bone);
+        
+        if (!bones.length) {
+          Blockbench.showQuickMessage('项目中未找到骨骼。');
+          return;
+        }
+
+        // 按旋转角度分组（使用字符串表示旋转以避免浮点数精度问题）
+        const rotationGroups = new Map();
+        
+        bones.forEach(bone => {
+          const rotKey = [
+            clamp(bone.rotation[0] || 0),
+            clamp(bone.rotation[1] || 0), 
+            clamp(bone.rotation[2] || 0)
+          ].join(',');
+          
+          if (!rotationGroups.has(rotKey)) {
+            rotationGroups.set(rotKey, []);
+          }
+          rotationGroups.get(rotKey).push(bone);
+        });
+
+        // 过滤出需要分组的骨骼（至少2个相同旋转的骨骼）
+        const groupsToProcess = Array.from(rotationGroups.entries())
+          .filter(([rotKey, bones]) => bones.length > 1 && rotKey !== '0,0,0');
+
+        if (!groupsToProcess.length) {
+          Blockbench.showQuickMessage('未找到相同旋转的骨骼（不包括零旋转）。');
+          return;
+        }
+
+        // 收集所有需要修改的元素
+        const allElements = new Set();
+        groupsToProcess.forEach(([rotKey, bones]) => {
+          bones.forEach(bone => {
+            allElements.add(bone);
+            // 也包含骨骼的所有子元素
+            bone.children.forEach(child => allElements.add(child));
+          });
+        });
+
+        Undo.initEdit({ elements: Array.from(allElements), outliner: true, selection: true });
+        let groupCount = 0;
+        let boneCount = 0;
+
+        groupsToProcess.forEach(([rotKey, bones]) => {
+          const rotation = bones[0].rotation;
+          
+          // 计算新父骨骼的位置（所有骨骼原点的平均值）
+          const avgOrigin = [0, 0, 0];
+          bones.forEach(bone => {
+            avgOrigin[0] += bone.origin[0] || 0;
+            avgOrigin[1] += bone.origin[1] || 0;
+            avgOrigin[2] += bone.origin[2] || 0;
+          });
+          avgOrigin[0] = clamp(avgOrigin[0] / bones.length);
+          avgOrigin[1] = clamp(avgOrigin[1] / bones.length);
+          avgOrigin[2] = clamp(avgOrigin[2] / bones.length);
+
+          // 创建新的父骨骼
+          const parentBoneName = makeUnique(`旋转组_${rotation[0] || 0}_${rotation[1] || 0}_${rotation[2] || 0}`);
+          const parentBone = new Group({
+            name: parentBoneName,
+            origin: avgOrigin,
+            rotation: [0, 0, 0], // 父骨骼旋转归零，旋转信息转移到子骨骼的相对位置
+            is_bone: true
+          }).init();
+
+          // 找到第一个骨骼的父级和插入位置
+          const firstBone = bones[0];
+          const parent = firstBone.parent || null;
+          const insertIndex = parent ? parent.children.indexOf(firstBone) : undefined;
+          
+          parentBone.addTo(parent, insertIndex);
+          groupCount++;
+
+          // 将每个骨骼移动到新父骨骼下，并调整其相对位置
+          bones.forEach(bone => {
+            const originalOrigin = [bone.origin[0] || 0, bone.origin[1] || 0, bone.origin[2] || 0];
+            const originalRotation = [bone.rotation[0] || 0, bone.rotation[1] || 0, bone.rotation[2] || 0];
+            
+            // 计算相对于父骨骼的新原点
+            const relativeOrigin = [
+              clamp(originalOrigin[0] - avgOrigin[0]),
+              clamp(originalOrigin[1] - avgOrigin[1]),
+              clamp(originalOrigin[2] - avgOrigin[2])
+            ];
+            
+            // 将骨骼移动到新父骨骼下
+            bone.addTo(parentBone);
+            
+            // 更新骨骼的原点和旋转
+            bone.origin = relativeOrigin;
+            bone.rotation = originalRotation; // 保持原有旋转
+            
+            boneCount++;
+          });
+        });
+
+        Canvas.updateAll();
+        Undo.finishEdit(`分组了${boneCount}个骨骼到${groupCount}个旋转组`);
+        Blockbench.showQuickMessage(`完成：将${boneCount}个相同旋转的骨骼分组到${groupCount}个父骨骼中。立方体位置已保留。`);
+      }
+    });
+
     // 菜单
     MenuBar.addAction(action_wrap_illegal, 'filter');
     MenuBar.addAction(action_wrap_force_zero, 'filter');
     MenuBar.addAction(action_add_zero_group_keep_cube, 'filter');
     MenuBar.addAction(action_unwrap_bone_name, 'filter');
     MenuBar.addAction(action_unwrap_any_group, 'filter');
+    MenuBar.addAction(action_group_same_rotation, 'filter');
 
     this._extra_actions = [
       action_wrap_force_zero,
       action_add_zero_group_keep_cube,
       action_unwrap_bone_name,
-      action_unwrap_any_group
+      action_unwrap_any_group,
+      action_group_same_rotation
     ];
   },
 
